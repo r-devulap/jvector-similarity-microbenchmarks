@@ -7,6 +7,7 @@ import io.github.jbellis.jvector.vector.types.VectorTypeSupport;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
+import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.Mode;
 import org.openjdk.jmh.annotations.OutputTimeUnit;
@@ -17,7 +18,7 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
 
-import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -64,14 +65,17 @@ public class VectorSimilarityBenchmark {
     @Param({"panama", "native"})
     public String backend;
 
-    @Param({"64", "128", "512", "768", "1024"})
+    @Param({"128", "256", "384", "512", "768", "1024", "1536", "3072"})
     public int dims;
+
+    private static final VectorTypeSupport VTS =
+            VectorizationProvider.getInstance().getVectorTypeSupport();
 
     private VectorFloat<?> a;
     private VectorFloat<?> b;
 
-    @Setup
-    public void setup() {
+    @Setup(Level.Trial)
+    public void setupBackendCheck() {
         // Sanity-check: confirm the provider that actually loaded matches the label.
         // This catches accidental mismatches when running benchmarks manually.
         String providerClass = VectorizationProvider.getInstance().getClass().getSimpleName();
@@ -86,19 +90,21 @@ public class VectorSimilarityBenchmark {
                     providerClass + ". " +
                     "Pass the correct JVM flags for this backend (see run_benchmarks.sh).");
         }
+    }
 
-        VectorTypeSupport vts = VectorizationProvider.getInstance().getVectorTypeSupport();
-        Random rng = new Random(42);
+    @Setup(Level.Iteration)
+    public void setup() {
+        ThreadLocalRandom rng = ThreadLocalRandom.current();
 
         float[] fa = new float[dims];
         float[] fb = new float[dims];
         for (int i = 0; i < dims; i++) {
-            fa[i] = rng.nextFloat() * 2 - 1f;
-            fb[i] = rng.nextFloat() * 2 - 1f;
+            fa[i] = rng.nextFloat() * 2 - 1;
+            fb[i] = rng.nextFloat() * 2 - 1;
         }
 
-        a = vts.createFloatVector(fa);
-        b = vts.createFloatVector(fb);
+        a = VTS.createFloatVector(fa);
+        b = VTS.createFloatVector(fb);
     }
 
     @Benchmark
